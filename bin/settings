@@ -1,0 +1,21 @@
+#!/bin/bash
+# Settings are consumed by the scripts that source this file.
+# shellcheck disable=SC2034
+load_settings() {
+    KIOSK_URL=''; DISPLAY_OUTPUT=auto; DISPLAY_ROTATION=left
+    DISPLAY_REFLECTION=normal; DISPLAY_MODE='1920x1080'; DISPLAY_RATE=''
+    RESTART_DELAY=10; RELOAD_INTERVAL=1800; IGNORE_CERT_ERRORS=false
+    ALLOW_MIXED_CONTENT=false; BROWSER_RENDERING=software; GRAPHICS_DRIVER=kms
+    source "${KIOSK_CONFIG:-/etc/tv-poster-system/kiosk.conf}"
+    case "$KIOSK_URL" in http://?*|https://?*) ;; *) echo 'KIOSK_URL must be an HTTP(S) URL' >&2; return 1;; esac
+    case "$DISPLAY_ROTATION" in normal|left|right|inverted) ;; *) echo 'Invalid rotation' >&2; return 1;; esac
+    case "$DISPLAY_REFLECTION" in normal|x|y|xy) ;; *) echo 'Invalid reflection' >&2; return 1;; esac
+    case "$IGNORE_CERT_ERRORS" in true|false) ;; *) echo 'Invalid TLS setting' >&2; return 1;; esac
+    case "$ALLOW_MIXED_CONTENT" in true|false) ;; *) echo 'Invalid mixed-content setting' >&2; return 1;; esac
+    case "$BROWSER_RENDERING" in auto|software) ;; *) echo 'Invalid rendering mode' >&2; return 1;; esac
+    case "$GRAPHICS_DRIVER" in kms|dietpi) ;; *) echo 'Invalid graphics driver' >&2; return 1;; esac
+    [[ $RESTART_DELAY =~ ^[1-9][0-9]*$ && $RELOAD_INTERVAL =~ ^(0|[1-9][0-9]*)$ ]] || { echo 'Invalid restart/reload interval' >&2; return 1; }
+    [[ -n $DISPLAY_OUTPUT ]] || return 1
+    [[ -z $DISPLAY_MODE || $DISPLAY_MODE =~ ^[0-9]+x[0-9]+$ ]] || { echo 'Mode must look like 1920x1080' >&2; return 1; }
+    [[ -z $DISPLAY_RATE || $DISPLAY_RATE =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
+}

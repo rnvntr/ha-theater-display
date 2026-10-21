@@ -1,0 +1,20 @@
+#!/bin/bash
+# Sourced by the kiosk and tested independently. No browser is started here.
+build_browser_args() {
+    args=(--kiosk --start-fullscreen --start-maximized --window-position=0,0
+          --force-device-scale-factor=1 --overscroll-history-navigation=0 --disable-pinch
+          --disable-features=TranslateUI --disable-session-crashed-bubble
+          --no-first-run --no-default-browser-check --noerrdialogs
+          --password-store=basic --user-data-dir="$HOME/.config/tv-poster-system/chromium")
+    if [[ -n $DISPLAY_MODE ]]; then
+        local width=${DISPLAY_MODE%x*} height=${DISPLAY_MODE#*x}
+        case "$DISPLAY_ROTATION" in left|right) args+=("--window-size=$height,$width");;
+            *) args+=("--window-size=$width,$height");; esac
+    fi
+    if [[ $BROWSER_RENDERING == software ]]; then
+        args+=(--disable-gpu --disable-gpu-compositing --disable-accelerated-2d-canvas)
+    fi
+    [[ $IGNORE_CERT_ERRORS != true ]] || args+=(--ignore-certificate-errors)
+    [[ $ALLOW_MIXED_CONTENT != true ]] || args+=(--allow-running-insecure-content)
+    return 0
+}

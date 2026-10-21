@@ -1,0 +1,10 @@
+#!/bin/bash
+set -Eeuo pipefail
+[[ $EUID -eq 0 ]] || { echo 'Run this health check with sudo.' >&2; exit 1; }
+systemctl is-active --quiet lightdm || { echo 'FAIL: LightDM inactive'; exit 1; }
+systemctl is-enabled --quiet lightdm || { echo 'FAIL: boot startup disabled'; exit 1; }
+pgrep -u poster-kiosk -f '/opt/tv-poster-system/bin/kiosk-session' >/dev/null || { echo 'FAIL: kiosk session absent'; exit 1; }
+pgrep -u poster-kiosk -f 'chromium.*--kiosk' >/dev/null || { echo 'FAIL: kiosk browser absent'; exit 1; }
+python3 /opt/tv-poster-system/scripts/configure.py --check-url
+echo 'PASS: autostart enabled, display session and browser running, dashboard endpoint reachable.'
+echo 'Confirm the screen shows the intended HA view, is signed in, and is correctly rotated.'

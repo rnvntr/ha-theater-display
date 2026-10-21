@@ -1,0 +1,12 @@
+name: Check kiosk scripts
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tests/check.sh
+      - run: python3 -m unittest discover -s tests
+      - run: node tests/dashboard.cjs

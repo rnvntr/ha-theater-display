@@ -1,0 +1,41 @@
+#!/bin/bash
+set -Eeuo pipefail
+source /opt/tv-poster-system/bin/settings
+source /opt/tv-poster-system/bin/browser-options
+load_settings
+[[ $EUID -ne 0 ]] || { echo 'Run this session as the kiosk user, not root.' >&2; exit 1; }
+mkdir -p "$HOME/.local/state/tv-poster-system" "$HOME/.config/tv-poster-system/chromium"
+log="$HOME/.local/state/tv-poster-system/session.log"
+[[ ! -f $log ]] || mv -f "$log" "$log.previous"
+exec >"$log" 2>&1
+echo "$(date -Is) Starting kiosk session"
+# One log per session; LightDM also records errors in ~/.xsession-errors.
+browser_pid=''; wm_pid=''; cursor_pid=''
+cleanup() {
+    for pid in "$browser_pid" "$cursor_pid" "$wm_pid"; do
+        [[ -z $pid ]] || kill "$pid" 2>/dev/null || true
+    done
+}
+trap cleanup EXIT
+trap 'exit 0' TERM INT HUP
+openbox & wm_pid=$!
+unclutter -idle 0.5 -root & cursor_pid=$!
+xset s off
+xset s noblank
+xset -dpms || true
+browser=$(command -v chromium || command -v chromium-browser) || exit 1
+while :; do
+    load_settings
+    if ! /opt/tv-poster-system/bin/configure-display; then
+        echo 'Display unavailable; retrying.'; sleep "$RESTART_DELAY"; continue
+    fi
+    build_browser_args
+    if (( RELOAD_INTERVAL > 0 )); then
+        timeout --signal=TERM --kill-after=10 "$RELOAD_INTERVAL" "$browser" "${args[@]}" "$KIOSK_URL" & browser_pid=$!
+    else
+        "$browser" "${args[@]}" "$KIOSK_URL" & browser_pid=$!
+    fi
+    wait "$browser_pid" || true
+    browser_pid=''
+    sleep "$RESTART_DELAY"
+done

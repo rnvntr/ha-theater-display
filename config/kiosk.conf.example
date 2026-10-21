@@ -1,0 +1,23 @@
+# Shell syntax. Keep values quoted. Installed as /etc/tv-poster-system/kiosk.conf.
+KIOSK_URL='https://homeassistant.example.com/lovelace/streaming'
+# auto selects the first connected output; or set HDMI-1 explicitly.
+DISPLAY_OUTPUT='auto'
+# normal, left (90 degrees), right (270 degrees), inverted (180 degrees)
+DISPLAY_ROTATION='left'
+# normal, x, y, xy. Leave normal unless actual mirroring is needed.
+DISPLAY_REFLECTION='normal'
+# Native landscape mode BEFORE rotation; blank uses the preferred monitor mode.
+# Example: 1920x1080 becomes a 1080x1920 portrait desktop with left rotation.
+DISPLAY_MODE='1920x1080'
+DISPLAY_RATE=''
+RESTART_DELAY=10
+# Reopen the dashboard periodically to recover from HA/network outages.
+# 0 disables. Browser login is preserved; restarting may interrupt interaction.
+RELOAD_INTERVAL=1800
+# Explicit opt-in only for a trusted local endpoint using an untrusted certificate.
+IGNORE_CERT_ERRORS=false
+ALLOW_MIXED_CONTENT=false
+# Matches the recovered Pi 3 browser configuration. auto uses Chromium's defaults.
+BROWSER_RENDERING=software
+# kms explicitly enables full KMS. dietpi delegates driver selection to LightDM setup.
+GRAPHICS_DRIVER=kms

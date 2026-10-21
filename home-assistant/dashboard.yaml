@@ -1,0 +1,2722 @@
+title: Theater
+views:
+  title: Streaming
+  path: streaming
+  icon: mdi:television-speaker
+  badges: []
+  type: panel
+  cards:
+    - type: custom:button-card
+      # button-card 7+: entity dependencies are discovered automatically.
+      update_timer: 10000
+      variables:
+        # First playing/buffering player wins, then first paused player.
+        players:
+          - media_player.theater_plex
+          - media_player.theater_cast
+          - media_player.theater_tv
+          - media_player.theater_music
+        weather_entity: weather.home
+        poster_files: []
+        rotation_seconds: 120
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      double_tap_action:
+        action: none
+      custom_fields:
+        poster: |
+          [[[
+            const ids = Array.isArray(variables.players) ? variables.players : [];
+            const selected = ids.find(id => ['playing', 'buffering'].includes(states[id]?.state))
+              || ids.find(id => states[id]?.state === 'paused');
+            const active = selected ? 'playing' : 'idle';
+            const activeRaw = active;
+            function key(value) { return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+            const playerProfiles = { chromecast: {
+              bg1: '#0b1020', accent: '#7dd3fc', accent2: '#c4b5fd', fallback: 'Now Playing'
+            }, spotify: { entity_id: '' }};
+
+            function esc(value) {
+              return String(value == null ? '' : value)
+                .replace(/[&<>"']/g, function(match) {
+                  return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                  }[match];
+                });
+            }
+
+            function providerHintFromText(value) {
+              const s = String(value || '').toLowerCase();
+
+              if (
+                s.includes('prime video') ||
+                s.includes('amazon prime') ||
+                s.includes('amazon video') ||
+                s.includes('primevideo') ||
+                s.includes('prime_video') ||
+                s.includes('amazon instant video') ||
+                s.includes('avod') ||
+                s.includes('aiv') ||
+                s === 'prime' ||
+                s === 'amazon'
+              ) {
+                return 'Prime Video';
+              }
+
+              if (
+                s.includes('netflix') ||
+                s.includes('nrdp') ||
+                s.includes('com.netflix')
+              ) {
+                return 'Netflix';
+              }
+
+              if (s.includes('peacock')) return 'Peacock';
+              if (s.includes('hulu')) return 'Hulu';
+              if (s.includes('disney')) return 'Disney+';
+              if (s.includes('paramount')) return 'Paramount+';
+              if (s.includes('youtube tv')) return 'YouTube TV';
+              if (s.includes('youtube')) return 'YouTube';
+              if (s.includes('apple tv')) return 'Apple TV';
+              if (s.includes('hbo')) return 'Max';
+              if (s.includes('max')) return 'Max';
+              if (s.includes('crunchyroll')) return 'Crunchyroll';
+              if (s.includes('tubi')) return 'Tubi';
+              if (s.includes('plex')) return 'Plex';
+              if (s.includes('spotify')) return 'Spotify';
+
+              return '';
+            }
+
+            function cleanProvider(value) {
+              const raw = String(value || '').trim();
+
+              if (!raw) {
+                return '';
+              }
+
+              const lower = raw.toLowerCase();
+
+              if (
+                lower === 'default media receiver' ||
+                lower === 'cast' ||
+                lower === 'unknown' ||
+                lower === 'video' ||
+                lower === 'media' ||
+                lower === 'stream' ||
+                lower === 'none' ||
+                lower === 'null' ||
+                lower === 'undefined'
+              ) {
+                return '';
+              }
+
+              const hinted = providerHintFromText(raw);
+
+              if (hinted) {
+                return hinted;
+              }
+
+              return raw;
+            }
+
+            function cssUrl(value) {
+              return String(value || '')
+                .replace(/"/g, '%22')
+                .replace(/'/g, '%27');
+            }
+
+            function isMeaningful(value) {
+              const s = String(value || '').trim().toLowerCase();
+
+              return !!s && ![
+                'video',
+                'media',
+                'unknown',
+                'default media receiver',
+                'on peacock',
+                'peacock',
+                'on prime video',
+                'prime video',
+                'amazon prime video',
+                'amazon instant video',
+                'on netflix',
+                'netflix',
+                'on max',
+                'max',
+                'hbo max',
+                'chromecast',
+                'tv',
+                'none',
+                'null',
+                'undefined'
+              ].includes(s);
+            }
+
+            function firstMeaningful(values) {
+              for (const value of values) {
+                if (isMeaningful(value)) {
+                  return value;
+                }
+              }
+
+              return '';
+            }
+
+            function anyAttrMatching(attrs, includeParts, excludeParts) {
+              const includes = includeParts || [];
+              const excludes = excludeParts || [];
+
+              for (const attrKey of Object.keys(attrs || {})) {
+                const k = String(attrKey || '').toLowerCase();
+
+                const good = includes.some(function(part) {
+                  return k.includes(String(part).toLowerCase());
+                });
+
+                const bad = excludes.some(function(part) {
+                  return k.includes(String(part).toLowerCase());
+                });
+
+                if (!good || bad) {
+                  continue;
+                }
+
+                const value = attrs[attrKey];
+
+                if (
+                  value === null ||
+                  value === undefined ||
+                  typeof value === 'object'
+                ) {
+                  continue;
+                }
+
+                if (isMeaningful(value)) {
+                  return value;
+                }
+              }
+
+              return '';
+            }
+
+            function deepAttrMatching(obj, includeParts, excludeParts, depth) {
+              if (!obj || typeof obj !== 'object' || depth > 4) {
+                return '';
+              }
+
+              const includes = includeParts || [];
+              const excludes = excludeParts || [];
+
+              for (const attrKey of Object.keys(obj)) {
+                const k = String(attrKey || '').toLowerCase();
+                const value = obj[attrKey];
+
+                const good = includes.some(function(part) {
+                  return k.includes(String(part).toLowerCase());
+                });
+
+                const bad = excludes.some(function(part) {
+                  return k.includes(String(part).toLowerCase());
+                });
+
+                if (
+                  good &&
+                  !bad &&
+                  value !== null &&
+                  value !== undefined &&
+                  typeof value !== 'object'
+                ) {
+                  if (isMeaningful(value)) {
+                    return value;
+                  }
+                }
+
+                if (value && typeof value === 'object') {
+                  const nested = deepAttrMatching(
+                    value,
+                    includeParts,
+                    excludeParts,
+                    depth + 1
+                  );
+
+                  if (nested) {
+                    return nested;
+                  }
+                }
+              }
+
+              return '';
+            }
+
+            function firstImage(attrs) {
+              return (
+                attrs.entity_picture ||
+                attrs.media_image_url ||
+                attrs.media_image ||
+                attrs.media_thumbnail ||
+                attrs.thumbnail ||
+                attrs.thumbnail_url ||
+                attrs.poster ||
+                attrs.poster_url ||
+                attrs.artwork_url ||
+                attrs.image ||
+                attrs.image_url ||
+                anyAttrMatching(attrs, ['poster'], ['rating']) ||
+                anyAttrMatching(attrs, ['thumbnail'], ['rating']) ||
+                anyAttrMatching(attrs, ['artwork'], ['rating']) ||
+                deepAttrMatching(attrs, ['poster'], ['rating'], 0) ||
+                deepAttrMatching(attrs, ['thumbnail'], ['rating'], 0) ||
+                deepAttrMatching(attrs, ['artwork'], ['rating'], 0) ||
+                deepAttrMatching(attrs, ['image'], ['rating'], 0) ||
+                ''
+              );
+            }
+
+            function fmt(seconds) {
+              const s = Number(seconds || 0);
+
+              if (!isFinite(s) || s < 0) {
+                return '0:00';
+              }
+
+              const h = Math.floor(s / 3600);
+              const m = Math.floor((s % 3600) / 60);
+              const sec = Math.floor(s % 60);
+
+              if (h > 0) {
+                return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+              }
+
+              return `${m}:${String(sec).padStart(2, '0')}`;
+            }
+
+            function titleFitStyle(value) {
+              const title = String(value || '');
+              const len = title.length;
+
+              let size = '7.2vh';
+              let spacing = '-.078em';
+              let line = '.86';
+
+              if (len > 10) {
+                size = '6.4vh';
+                spacing = '-.075em';
+              }
+
+              if (len > 14) {
+                size = '5.6vh';
+                spacing = '-.07em';
+                line = '.88';
+              }
+
+              if (len > 20) {
+                size = '4.8vh';
+                spacing = '-.064em';
+                line = '.9';
+              }
+
+              if (len > 28) {
+                size = '4vh';
+                spacing = '-.055em';
+                line = '.93';
+              }
+
+              if (len > 38) {
+                size = '3.25vh';
+                spacing = '-.04em';
+                line = '.96';
+              }
+
+              if (len > 52) {
+                size = '2.65vh';
+                spacing = '-.025em';
+                line = '1';
+              }
+
+              if (len > 70) {
+                size = '2.15vh';
+                spacing = '-.01em';
+                line = '1.05';
+              }
+
+              return `--title-size:${size}; --title-spacing:${spacing}; --title-line:${line};`;
+            }
+
+            function epPart(prefix, value) {
+              const raw = String(value || '').trim();
+
+              if (!raw) {
+                return '';
+              }
+
+              if (/^[0-9]+$/.test(raw)) {
+                return `${prefix}${raw.padStart(2, '0')}`;
+              }
+
+              const cleaned = raw
+                .toUpperCase()
+                .replace(/^S/i, '')
+                .replace(/^E/i, '');
+
+              if (/^[0-9]+$/.test(cleaned)) {
+                return `${prefix}${cleaned.padStart(2, '0')}`;
+              }
+
+              return `${prefix}${raw}`;
+            }
+
+            function entityLabel(entityId) {
+              const st = states[entityId];
+              const a = st ? st.attributes || {} : {};
+              const friendly = a.friendly_name || '';
+
+              if (friendly) {
+                return friendly
+                  .replace(/ media player$/i, '')
+                  .replace(/ player$/i, '')
+                  .replace(/'/g, '');
+              }
+
+              return String(entityId || '')
+                .replace('media_player.', '')
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, function(c) {
+                  return c.toUpperCase();
+                });
+            }
+
+            function providerFromAttributes(attrs) {
+              return (
+                cleanProvider(attrs.app_name) ||
+                cleanProvider(attrs.media_app_name) ||
+                cleanProvider(attrs.application_name) ||
+                cleanProvider(attrs.current_app) ||
+                cleanProvider(attrs.current_activity) ||
+                cleanProvider(attrs.media_channel) ||
+                cleanProvider(attrs.source) ||
+                cleanProvider(attrs.app_id) ||
+                cleanProvider(
+                  deepAttrMatching(
+                    attrs,
+                    ['provider'],
+                    ['id', 'url'],
+                    0
+                  )
+                ) ||
+                ''
+              );
+            }
+
+            function styleForProvider(provider, fallbackStyle) {
+              const p = String(provider || '').toLowerCase();
+
+              if (p.includes('prime') || p.includes('amazon')) {
+                return {
+                  bg1: '#03111f',
+                  accent: '#00a8e1',
+                  accent2: '#146eb4'
+                };
+              }
+
+              if (p.includes('netflix')) {
+                return {
+                  bg1: '#120606',
+                  accent: '#e50914',
+                  accent2: '#b20710'
+                };
+              }
+
+              if (p.includes('peacock')) {
+                return {
+                  bg1: '#06111c',
+                  accent: '#00c2ff',
+                  accent2: '#7b2cff'
+                };
+              }
+
+              if (p.includes('hulu')) {
+                return {
+                  bg1: '#03130b',
+                  accent: '#1ce783',
+                  accent2: '#0b8f4d'
+                };
+              }
+
+              if (p.includes('disney')) {
+                return {
+                  bg1: '#050d22',
+                  accent: '#7fb7ff',
+                  accent2: '#2447ff'
+                };
+              }
+
+              if (p.includes('crunchyroll')) {
+                return {
+                  bg1: '#170a02',
+                  accent: '#f47521',
+                  accent2: '#ff9b4a'
+                };
+              }
+
+              if (p.includes('spotify')) {
+                return {
+                  bg1: '#041008',
+                  accent: '#1db954',
+                  accent2: '#7dff7a'
+                };
+              }
+
+              if (p.includes('plex')) {
+                return {
+                  bg1: '#100606',
+                  accent: '#ffba08',
+                  accent2: '#d90429'
+                };
+              }
+
+              if (p.includes('max') || p.includes('hbo')) {
+                return {
+                  bg1: '#060817',
+                  accent: '#9b7cff',
+                  accent2: '#4d2cff'
+                };
+              }
+
+              return fallbackStyle || {
+                bg1: '#06111c',
+                accent: '#00c2ff',
+                accent2: '#7b2cff'
+              };
+            }
+
+            function starsFromFive(value) {
+              const n = Math.max(
+                0,
+                Math.min(5, Math.round(Number(value || 0)))
+              );
+
+              return (
+                '★★★★★'.slice(0, n) +
+                '☆☆☆☆☆'.slice(0, 5 - n)
+              );
+            }
+
+            function formatRating(raw) {
+              if (
+                raw === null ||
+                raw === undefined ||
+                raw === ''
+              ) {
+                return '';
+              }
+
+              const text = String(raw).trim();
+
+              if (!text) {
+                return '';
+              }
+
+              const lower = text.toLowerCase();
+
+              if (
+                lower === 'unknown' ||
+                lower === 'none' ||
+                lower === 'null' ||
+                lower === 'undefined'
+              ) {
+                return '';
+              }
+
+              const slash = text.match(
+                /([0-9]+(?:\.[0-9]+)?)\s*\/\s*([0-9]+(?:\.[0-9]+)?)/
+              );
+
+              if (slash) {
+                const score = Number(slash[1]);
+                const max = Number(slash[2]);
+
+                if (
+                  isFinite(score) &&
+                  isFinite(max) &&
+                  max > 0
+                ) {
+                  return starsFromFive(
+                    (score / max) * 5
+                  );
+                }
+              }
+
+              const percent = text.match(
+                /([0-9]+(?:\.[0-9]+)?)\s*%/
+              );
+
+              if (percent) {
+                const score = Number(percent[1]);
+
+                if (isFinite(score)) {
+                  return starsFromFive(score / 20);
+                }
+              }
+
+              const n = Number(text);
+
+              if (isFinite(n)) {
+                if (n > 0 && n <= 5) {
+                  return starsFromFive(n);
+                }
+
+                if (n > 5 && n <= 10) {
+                  return starsFromFive(n / 2);
+                }
+
+                if (n > 10 && n <= 100) {
+                  return starsFromFive(n / 20);
+                }
+              }
+
+              return '';
+            }
+
+            function ratingFromAttributes(attrs) {
+              const direct = [
+                attrs.rating,
+                attrs.star_rating,
+                attrs.user_rating,
+                attrs.audience_rating,
+                attrs.viewer_rating,
+                attrs.imdb_rating,
+                attrs.tmdb_rating,
+                attrs.rotten_tomatoes_rating,
+                attrs.critic_rating,
+                attrs.media_rating,
+                attrs.score
+              ];
+
+              for (const value of direct) {
+                const formatted = formatRating(value);
+
+                if (formatted) {
+                  return formatted;
+                }
+              }
+
+              const matched =
+                anyAttrMatching(
+                  attrs,
+                  ['star'],
+                  ['reason', 'system', 'id', 'url']
+                ) ||
+                anyAttrMatching(
+                  attrs,
+                  ['rating'],
+                  [
+                    'reason',
+                    'system',
+                    'id',
+                    'url',
+                    'parental',
+                    'content'
+                  ]
+                ) ||
+                anyAttrMatching(
+                  attrs,
+                  ['score'],
+                  ['reason', 'system', 'id', 'url']
+                ) ||
+                deepAttrMatching(
+                  attrs,
+                  ['star'],
+                  ['reason', 'system', 'id', 'url'],
+                  0
+                ) ||
+                deepAttrMatching(
+                  attrs,
+                  ['rating'],
+                  [
+                    'reason',
+                    'system',
+                    'id',
+                    'url',
+                    'parental',
+                    'content'
+                  ],
+                  0
+                ) ||
+                deepAttrMatching(
+                  attrs,
+                  ['score'],
+                  ['reason', 'system', 'id', 'url'],
+                  0
+                );
+
+              const formattedMatched =
+                formatRating(matched);
+
+              if (formattedMatched) {
+                return formattedMatched;
+              }
+
+              return '★★★★★';
+            }
+
+            function showTitleFromAttributes(
+              attrs,
+              rawMediaTitle,
+              providerRaw
+            ) {
+              const providerLower =
+                String(providerRaw || '').toLowerCase();
+
+              const rawLower =
+                String(rawMediaTitle || '')
+                  .trim()
+                  .toLowerCase();
+
+              function usable(value, allowSameAsRaw) {
+                const s = String(value || '').trim();
+
+                if (!isMeaningful(s)) {
+                  return '';
+                }
+
+                const lower = s.toLowerCase();
+
+                if (
+                  providerLower &&
+                  lower === providerLower
+                ) {
+                  return '';
+                }
+
+                if (
+                  providerLower &&
+                  lower === `on ${providerLower}`
+                ) {
+                  return '';
+                }
+
+                if (
+                  !allowSameAsRaw &&
+                  rawLower &&
+                  lower === rawLower
+                ) {
+                  return '';
+                }
+
+                return s;
+              }
+
+              const strongSeriesFields = [
+                attrs.media_series_title,
+                attrs.media_show_title,
+                attrs.media_tv_show_title,
+                attrs.tv_show_title,
+                attrs.series_title,
+                attrs.show_title,
+                attrs.show_name,
+                attrs.program_title,
+                attrs.media_program_title,
+                attrs.media_collection_title,
+                attrs.collection_title,
+                deepAttrMatching(
+                  attrs,
+                  ['media_series_title'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['series_title'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['show_title'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['show_name'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['program_title'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['collection_title'],
+                  ['id', 'url'],
+                  0
+                )
+              ];
+
+              for (const value of strongSeriesFields) {
+                const good = usable(value, true);
+
+                if (good) {
+                  return good;
+                }
+              }
+
+              const softerSeriesFields = [
+                attrs.media_album_name,
+                attrs.media_artist,
+                attrs.album_name,
+                attrs.collection_name,
+                anyAttrMatching(
+                  attrs,
+                  ['series'],
+                  ['id', 'url']
+                ),
+                anyAttrMatching(
+                  attrs,
+                  ['show'],
+                  ['id', 'url']
+                ),
+                anyAttrMatching(
+                  attrs,
+                  ['program'],
+                  ['id', 'url']
+                ),
+                anyAttrMatching(
+                  attrs,
+                  ['collection'],
+                  ['id', 'url']
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['series'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['show'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['program'],
+                  ['id', 'url'],
+                  0
+                ),
+                deepAttrMatching(
+                  attrs,
+                  ['collection'],
+                  ['id', 'url'],
+                  0
+                )
+              ];
+
+              for (const value of softerSeriesFields) {
+                const good = usable(value, false);
+
+                if (good) {
+                  return good;
+                }
+              }
+
+              return '';
+            }
+
+            function profileFromEntity(
+              entityId,
+              hint,
+              fallbackProfile
+            ) {
+              const st = states[entityId] || {};
+              const attrs = st.attributes || {};
+
+              const provider =
+                providerFromAttributes(attrs) ||
+                providerHintFromText(hint) ||
+                cleanProvider(hint) ||
+                '';
+
+              const providerStyle =
+                styleForProvider(
+                  provider,
+                  fallbackProfile
+                );
+
+              const fallbackName =
+                fallbackProfile &&
+                fallbackProfile.fallback
+                  ? fallbackProfile.fallback
+                  : 'Now Playing';
+
+              return {
+                entity_id: entityId,
+                source: entityLabel(entityId),
+                fallback:
+                  provider || fallbackName,
+                provider_hint: provider,
+                bg1: providerStyle.bg1,
+                accent: providerStyle.accent,
+                accent2: providerStyle.accent2
+              };
+            }
+
+            function idlePoster() {
+              const weatherEntity =
+                states[
+                  variables.weather_entity
+                ];
+
+              const wa = weatherEntity
+                ? weatherEntity.attributes || {}
+                : {};
+
+              const weatherState = weatherEntity
+                ? weatherEntity.state || ''
+                : '';
+
+              function prettyWeather(value) {
+                return String(value || '')
+                  .replace(/-/g, ' ')
+                  .replace(/_/g, ' ')
+                  .replace(/\b\w/g, function(c) {
+                    return c.toUpperCase();
+                  });
+              }
+
+              function weatherIcon(value) {
+                const s =
+                  String(value || '')
+                    .toLowerCase();
+
+                if (
+                  s.includes('lightning') ||
+                  s.includes('thunder')
+                ) {
+                  return '⚡';
+                }
+
+                if (
+                  s.includes('rain') ||
+                  s.includes('pour')
+                ) {
+                  return '🌧';
+                }
+
+                if (s.includes('snow')) {
+                  return '❄';
+                }
+
+                if (s.includes('fog')) {
+                  return '🌫';
+                }
+
+                if (s.includes('wind')) {
+                  return '💨';
+                }
+
+                if (s.includes('partly')) {
+                  return '⛅';
+                }
+
+                if (s.includes('cloud')) {
+                  return '☁';
+                }
+
+                if (
+                  s.includes('sun') ||
+                  s.includes('clear')
+                ) {
+                  return '☀';
+                }
+
+                return '◉';
+              }
+
+              const temperature =
+                wa.temperature !== undefined &&
+                wa.temperature !== null
+                  ? `${Math.round(
+                      Number(wa.temperature)
+                    )}°`
+                  : '—';
+
+              let high = '';
+              let low = '';
+
+              if (
+                Array.isArray(wa.forecast) &&
+                wa.forecast.length
+              ) {
+                const today =
+                  wa.forecast[0] || {};
+
+                if (
+                  today.temperature !== undefined &&
+                  today.temperature !== null
+                ) {
+                  high =
+                    `${Math.round(
+                      Number(today.temperature)
+                    )}°`;
+                }
+
+                if (
+                  today.templow !== undefined &&
+                  today.templow !== null
+                ) {
+                  low =
+                    `${Math.round(
+                      Number(today.templow)
+                    )}°`;
+                }
+              }
+
+              const now = new Date();
+
+              const timeText =
+                now.toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit'
+                });
+
+              const dateText =
+                now.toLocaleDateString([], {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric'
+                });
+
+              const weatherLabel =
+                prettyWeather(weatherState);
+
+              const icon =
+                weatherIcon(weatherState);
+
+              const posterFiles = Array.isArray(variables.poster_files) ? variables.poster_files : [];
+              const rotationMs = Math.max(10, Number(variables.rotation_seconds) || 120) * 1000;
+
+              const slot =
+                Math.floor(
+                  Date.now() / rotationMs
+                );
+
+              const index =
+                slot % posterFiles.length;
+
+              const selectedPoster =
+                posterFiles[index];
+
+              const posterUrl =
+                '/local/theater-posters/' +
+                encodeURIComponent(
+                  selectedPoster
+                ).replace(/%2F/gi, '/');
+
+              const posterStyle =
+                posterFiles.length ? `background-image:url('${esc(cssUrl(posterUrl))}');` : '';
+
+              const forecastBits = [];
+
+              if (high) {
+                forecastBits.push(
+                  `H ${high}`
+                );
+              }
+
+              if (low) {
+                forecastBits.push(
+                  `L ${low}`
+                );
+              }
+
+              return `
+                <div
+                  class="poster-root"
+                  style="
+                    --accent:#ffba08;
+                    --accent2:#d90429;
+                    --bg1:#050505;
+                  "
+                >
+                  <div class="ambient-glow"></div>
+
+                  <div class="lightbox">
+
+                    <div
+                      class="screw screw-a"
+                    ></div>
+
+                    <div
+                      class="screw screw-b"
+                    ></div>
+
+                    <div class="gold-bevel">
+
+                      <div class="black-mat">
+
+                        <div
+                          class="poster-art lobby-poster"
+                          style="${posterStyle}"
+                        >
+
+                          <div
+                            class="movie-grain"
+                          ></div>
+
+                          <div class="lobby-top">
+
+                            <div class="lobby-date">
+                              ${esc(dateText)}
+                            </div>
+
+                            <div class="lobby-time">
+                              ${esc(timeText)}
+                            </div>
+
+                          </div>
+
+                          <div class="lobby-bottom">
+
+                            <div class="lobby-weather">
+
+                              <div
+                                class="lobby-weather-icon"
+                              >
+                                ${icon}
+                              </div>
+
+                              <div class="lobby-temp">
+                                ${esc(temperature)}
+                              </div>
+
+                              <div
+                                class="lobby-condition"
+                              >
+                                ${esc(weatherLabel)}
+                              </div>
+
+                              ${
+                                forecastBits.length
+                                  ? `
+                                    <div
+                                      class="lobby-forecast"
+                                    >
+                                      ${esc(
+                                        forecastBits.join(
+                                          '   •   '
+                                        )
+                                      )}
+                                    </div>
+                                  `
+                                  : ''
+                              }
+
+                            </div>
+
+                            <div
+                              class="lobby-divider"
+                            ></div>
+
+                            <div class="lobby-ready">
+                              <span></span>
+
+                              <b>
+                                THEATER • READY
+                              </b>
+
+                              <span></span>
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+                </div>
+              `;
+            }
+
+            if (!selected) return idlePoster();
+            const providerHint = '';
+            const cfg = profileFromEntity(selected, '', playerProfiles.chromecast);
+
+            const player =
+              states[cfg.entity_id] || {};
+
+            const a =
+              player.attributes || {};
+
+            const playerState =
+              player.state || 'unknown';
+
+            if (
+              active === 'idle' &&
+              !providerHint &&
+              ![
+                'playing',
+                'paused',
+                'buffering',
+                'on'
+              ].includes(
+                String(
+                  playerState || ''
+                ).toLowerCase()
+              )
+            ) {
+              return idlePoster();
+            }
+
+            const providerRaw =
+              providerFromAttributes(a) ||
+              cfg.provider_hint ||
+              providerHint ||
+              cfg.fallback ||
+              cfg.source;
+
+            const providerUpper =
+              String(
+                providerRaw || cfg.source
+              ).toUpperCase();
+
+            const providerLine =
+              `ON ${providerUpper}`;
+
+            const providerLower =
+              String(
+                providerRaw || ''
+              ).toLowerCase();
+
+            const isMusic =
+              cfg.entity_id ===
+                playerProfiles.spotify
+                  .entity_id ||
+              String(
+                a.media_content_type || ''
+              ).toLowerCase() === 'music';
+
+            const contentTypeKey =
+              key(
+                a.media_content_type ||
+                a.media_type ||
+                ''
+              );
+
+            const rawMediaTitle =
+              String(
+                a.media_title ||
+                a.title ||
+                a.name ||
+                anyAttrMatching(
+                  a,
+                  ['title'],
+                  [
+                    'subtitle',
+                    'content_id',
+                    'url'
+                  ]
+                ) ||
+                deepAttrMatching(
+                  a,
+                  ['title'],
+                  [
+                    'subtitle',
+                    'content_id',
+                    'url'
+                  ],
+                  0
+                ) ||
+                ''
+              ).trim();
+
+            const seriesTitle =
+              showTitleFromAttributes(
+                a,
+                rawMediaTitle,
+                providerRaw
+              );
+
+            const season =
+              epPart(
+                'S',
+                a.media_season ||
+                a.season_number ||
+                a.season
+              );
+
+            const episode =
+              epPart(
+                'E',
+                a.media_episode ||
+                a.episode_number ||
+                a.episode
+              );
+
+            let episodeCode =
+              season || episode
+                ? `${season}${episode}`
+                : '';
+
+            const year =
+              a.media_year ||
+              a.year ||
+              a.release_year ||
+              '';
+
+            const explicitEpisodeName =
+              firstMeaningful([
+                a.media_episode_title,
+                a.episode_title,
+                a.episode_name,
+                a.media_chapter_title,
+                a.chapter_title,
+
+                deepAttrMatching(
+                  a,
+                  ['episode_title'],
+                  ['id', 'url'],
+                  0
+                ),
+
+                deepAttrMatching(
+                  a,
+                  ['episode_name'],
+                  ['id', 'url'],
+                  0
+                ),
+
+                deepAttrMatching(
+                  a,
+                  ['chapter_title'],
+                  ['id', 'url'],
+                  0
+                )
+              ]);
+
+            const parsedSeasonEpisode =
+              rawMediaTitle.match(
+                /\bS([0-9]{1,2})\s*E([0-9]{1,2})\b/i
+              ) ||
+              rawMediaTitle.match(
+                /\bS([0-9]{1,2})E([0-9]{1,2})\b/i
+              );
+
+            if (
+              !episodeCode &&
+              parsedSeasonEpisode
+            ) {
+              episodeCode =
+                `S${String(
+                  parsedSeasonEpisode[1]
+                ).padStart(2, '0')}` +
+                `E${String(
+                  parsedSeasonEpisode[2]
+                ).padStart(2, '0')}`;
+            }
+
+            const parsedEpisodeName =
+              parsedSeasonEpisode &&
+              rawMediaTitle.includes('-')
+                ? rawMediaTitle
+                    .split('-')
+                    .slice(1)
+                    .join('-')
+                    .trim()
+                : '';
+
+            const episodeName =
+              isMeaningful(
+                explicitEpisodeName
+              )
+                ? explicitEpisodeName
+                : (
+                    isMeaningful(
+                      parsedEpisodeName
+                    )
+                      ? parsedEpisodeName
+                      : (
+                          !isMusic &&
+                          seriesTitle &&
+                          rawMediaTitle &&
+                          rawMediaTitle
+                            .toLowerCase() !==
+                            seriesTitle
+                              .toLowerCase() &&
+                          isMeaningful(
+                            rawMediaTitle
+                          )
+                            ? rawMediaTitle
+                            : ''
+                        )
+                  );
+
+            const rawTitleIsEpisode =
+              !!episodeName &&
+              !!rawMediaTitle &&
+              rawMediaTitle
+                .toLowerCase() ===
+                String(
+                  episodeName
+                ).toLowerCase();
+
+            const rawTitleLooksLikeEpisode =
+              rawTitleIsEpisode ||
+              (
+                !seriesTitle &&
+                !isMusic &&
+                !!rawMediaTitle &&
+                (
+                  !!episodeCode ||
+                  contentTypeKey.includes(
+                    'episode'
+                  )
+                )
+              );
+
+            let realMainTitle = '';
+
+            if (isMusic) {
+              realMainTitle =
+                firstMeaningful([
+                  a.media_title,
+                  a.title,
+                  a.name,
+                  a.media_album_name,
+                  a.media_artist,
+
+                  anyAttrMatching(
+                    a,
+                    ['title'],
+                    [
+                      'subtitle',
+                      'content_id',
+                      'url'
+                    ]
+                  ),
+
+                  deepAttrMatching(
+                    a,
+                    ['title'],
+                    [
+                      'subtitle',
+                      'content_id',
+                      'url'
+                    ],
+                    0
+                  )
+                ]);
+            } else {
+              realMainTitle =
+                firstMeaningful([
+                  seriesTitle,
+
+                  rawTitleLooksLikeEpisode
+                    ? ''
+                    : rawMediaTitle,
+
+                  a.media_program_title,
+                  a.program_title,
+
+                  anyAttrMatching(
+                    a,
+                    ['series'],
+                    ['id', 'url']
+                  ),
+
+                  anyAttrMatching(
+                    a,
+                    ['show'],
+                    ['id', 'url']
+                  ),
+
+                  anyAttrMatching(
+                    a,
+                    ['program'],
+                    ['id', 'url']
+                  ),
+
+                  deepAttrMatching(
+                    a,
+                    ['series'],
+                    ['id', 'url'],
+                    0
+                  ),
+
+                  deepAttrMatching(
+                    a,
+                    ['show'],
+                    ['id', 'url'],
+                    0
+                  ),
+
+                  deepAttrMatching(
+                    a,
+                    ['program'],
+                    ['id', 'url'],
+                    0
+                  )
+                ]);
+            }
+
+            const hasRealTitle =
+              !!realMainTitle;
+
+            const imageRaw =
+              String(
+                firstImage(a) || ''
+              );
+
+            const hasRealImage =
+              !!imageRaw;
+
+            let mainTitle =
+              realMainTitle ||
+              providerRaw ||
+              cfg.provider_hint ||
+              providerHint ||
+              cfg.fallback ||
+              'Now Playing';
+
+            const description =
+              firstMeaningful([
+                a.media_description,
+                a.description,
+                a.summary,
+                a.synopsis,
+                a.short_synopsis,
+                a.plot,
+                a.media_summary,
+
+                anyAttrMatching(
+                  a,
+                  ['description'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ]
+                ),
+
+                anyAttrMatching(
+                  a,
+                  ['summary'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ]
+                ),
+
+                anyAttrMatching(
+                  a,
+                  ['synopsis'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ]
+                ),
+
+                anyAttrMatching(
+                  a,
+                  ['plot'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ]
+                ),
+
+                deepAttrMatching(
+                  a,
+                  ['description'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ],
+                  0
+                ),
+
+                deepAttrMatching(
+                  a,
+                  ['summary'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ],
+                  0
+                ),
+
+                deepAttrMatching(
+                  a,
+                  ['synopsis'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ],
+                  0
+                ),
+
+                deepAttrMatching(
+                  a,
+                  ['plot'],
+                  [
+                    'rating',
+                    'id',
+                    'url'
+                  ],
+                  0
+                )
+              ]);
+
+            let detailLine = '';
+
+            if (isMusic) {
+              const artist =
+                isMeaningful(
+                  a.media_artist
+                )
+                  ? a.media_artist
+                  : '';
+
+              const album =
+                isMeaningful(
+                  a.media_album_name
+                ) &&
+                a.media_album_name !==
+                  mainTitle
+                  ? a.media_album_name
+                  : '';
+
+              detailLine =
+                [artist, album]
+                  .filter(Boolean)
+                  .join(' • ');
+            } else if (
+              description &&
+              hasRealTitle
+            ) {
+              detailLine =
+                description;
+            } else if (
+              !seriesTitle &&
+              year &&
+              hasRealTitle
+            ) {
+              detailLine =
+                String(year);
+            }
+
+            const ratingValue =
+              ratingFromAttributes(a);
+
+            const missingMetadataProvider =
+              (
+                providerLower.includes(
+                  'prime'
+                ) ||
+                providerLower.includes(
+                  'amazon'
+                ) ||
+                providerLower.includes(
+                  'netflix'
+                )
+              ) &&
+              !hasRealTitle &&
+              !hasRealImage;
+
+            const posterStyle =
+              hasRealImage
+                ? `background-image:url('${esc(cssUrl(imageRaw))}');`
+                : missingMetadataProvider
+                  ? `background-image:radial-gradient(circle at 50% 16%, ${cfg.accent}, transparent 30%), radial-gradient(circle at 50% 62%, ${cfg.accent2}, transparent 34%), linear-gradient(180deg, #111827, #020202 72%);`
+                  : `background-image:radial-gradient(circle at 50% 18%, ${cfg.accent}, transparent 36%), linear-gradient(180deg, #17202a, #020202 72%);`;
+
+            const durationNumber =
+              Number(
+                a.media_duration || 0
+              );
+
+            const positionNumber =
+              Number(
+                a.media_position || 0
+              );
+
+            const trustTime =
+              durationNumber > 0 &&
+              (
+                hasRealTitle ||
+                hasRealImage ||
+                providerLower.includes(
+                  'plex'
+                ) ||
+                providerLower.includes(
+                  'spotify'
+                )
+              );
+
+            const elapsed =
+              trustTime
+                ? fmt(positionNumber)
+                : '—';
+
+            const total =
+              trustTime
+                ? fmt(durationNumber)
+                : '—';
+
+            const topHtml =
+              episodeName ||
+              episodeCode
+                ? `
+                  <div class="poster-top">
+
+                    ${
+                      episodeName
+                        ? `
+                          <div class="top-kicker">
+                            ${esc(episodeName)}
+                          </div>
+                        `
+                        : ''
+                    }
+
+                    ${
+                      episodeCode
+                        ? `
+                          <div class="top-detail">
+                            ${esc(episodeCode)}
+                          </div>
+                        `
+                        : ''
+                    }
+
+                  </div>
+                `
+                : '';
+
+            const showProviderLine =
+              providerUpper &&
+              String(
+                mainTitle || ''
+              )
+                .trim()
+                .toUpperCase() !==
+                providerUpper;
+
+            const providerHtml =
+              showProviderLine
+                ? `
+                  <div class="provider-line">
+                    ${esc(providerLine)}
+                  </div>
+                `
+                : '';
+
+            const detailHtml =
+              detailLine
+                ? `
+                  <div class="detail-line">
+                    ${esc(detailLine)}
+                  </div>
+                `
+                : '';
+
+            return `
+              <div
+                class="poster-root"
+                style="
+                  --accent:${cfg.accent};
+                  --accent2:${cfg.accent2};
+                  --bg1:${cfg.bg1};
+                "
+              >
+
+                <div class="ambient-glow"></div>
+
+                <div class="lightbox">
+
+                  <div
+                    class="screw screw-a"
+                  ></div>
+
+                  <div
+                    class="screw screw-b"
+                  ></div>
+
+                  <div class="gold-bevel">
+
+                    <div class="black-mat">
+
+                      <div
+                        class="poster-art"
+                        style="${posterStyle}"
+                      >
+
+                        <div
+                          class="movie-grain"
+                        ></div>
+
+                        ${topHtml}
+
+                        <div class="poster-bottom">
+
+                          <div
+                            class="movie-title"
+                            style="${titleFitStyle(mainTitle)}"
+                          >
+                            ${esc(mainTitle)}
+                          </div>
+
+                          ${providerHtml}
+                          ${detailHtml}
+
+                          <div class="credits-block">
+
+                            <div class="metadata-grid">
+
+                              <div>
+                                <span>
+                                  Rating
+                                </span>
+
+                                <strong
+                                  class="star-text"
+                                >
+                                  ${esc(ratingValue)}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Time
+                                </span>
+
+                                <strong
+                                  class="accent-text"
+                                >
+                                  ${elapsed} / ${total}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>
+                                  Device
+                                </span>
+
+                                <strong>
+                                  ${esc(cfg.source)}
+                                </strong>
+                              </div>
+
+                            </div>
+
+                            <div class="showtime-row">
+                              <span></span>
+
+                              <b>
+                                PLAYING NOW
+                              </b>
+
+                              <span></span>
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+            `;
+          ]]]
+      styles:
+        card:
+          - height: 100vh
+          - width: 100vw
+          - padding: 0
+          - margin: 0
+          - border-radius: 0
+          - overflow: hidden
+          - border: none
+          - box-shadow: none
+          - background: '#020202'
+        grid:
+          - grid-template-areas: '"poster"'
+          - grid-template-columns: 1fr
+          - grid-template-rows: 1fr
+        custom_fields:
+          poster:
+            - height: 100vh
+            - width: 100vw
+            - display: block
+            - overflow: hidden
+      extra_styles: |
+        .poster-root,
+        .poster-root * {
+          box-sizing: border-box;
+        }
+
+        .poster-root {
+          width: 100vw;
+          height: 100vh;
+          position: relative;
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: Arial, Helvetica, sans-serif;
+          color: white;
+
+          background:
+            radial-gradient(
+              circle at 50% 0%,
+              rgba(255,186,8,.2),
+              transparent 34%
+            ),
+            radial-gradient(
+              circle at 50% 100%,
+              rgba(217,4,41,.16),
+              transparent 34%
+            ),
+            linear-gradient(
+              180deg,
+              var(--bg1),
+              #010101 72%
+            );
+        }
+
+        .poster-root:before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          opacity: .17;
+
+          background:
+            linear-gradient(
+              90deg,
+              rgba(255,255,255,.045) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              0deg,
+              rgba(255,255,255,.03) 1px,
+              transparent 1px
+            );
+
+          background-size: 44px 44px;
+          pointer-events: none;
+        }
+
+        .ambient-glow {
+          position: absolute;
+          width: 62vh;
+          height: 62vh;
+          border-radius: 999px;
+
+          background:
+            radial-gradient(
+              circle,
+              var(--accent),
+              transparent 68%
+            );
+
+          filter: blur(24px);
+          opacity: .22;
+          pointer-events: none;
+        }
+
+        .lightbox {
+          width:
+            min(
+              calc(100vw - 18px),
+              calc((100vh - 18px) * .5625)
+            );
+
+          height:
+            min(
+              calc(100vh - 18px),
+              calc((100vw - 18px) * 1.7778)
+            );
+
+          position: relative;
+
+          padding:
+            clamp(
+              10px,
+              1.25vh,
+              22px
+            );
+
+          border-radius: 6px;
+
+          background:
+            linear-gradient(
+              135deg,
+              #fff7ba 0%,
+              #d2a23c 14%,
+              #fff2a6 26%,
+              #9a681b 43%,
+              #f6d574 57%,
+              #7a4c0d 76%,
+              #fff6bd 100%
+            );
+
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,.38),
+            0 0 0 4px rgba(82,49,4,.95),
+            0 30px 90px rgba(0,0,0,.88),
+            inset 0 0 24px rgba(255,255,255,.65),
+            inset 0 0 60px rgba(74,37,0,.68);
+        }
+
+        .screw {
+          position: absolute;
+          left:
+            clamp(
+              7px,
+              1.2vh,
+              18px
+            );
+
+          width:
+            clamp(
+              7px,
+              .65vh,
+              12px
+            );
+
+          height:
+            clamp(
+              7px,
+              .65vh,
+              12px
+            );
+
+          border-radius: 999px;
+          z-index: 30;
+
+          background:
+            radial-gradient(
+              circle at 35% 35%,
+              #fff8d1,
+              #bf8c2a 45%,
+              #6c3d05 80%
+            );
+
+          box-shadow:
+            0 1px 1px rgba(255,255,255,.7),
+            inset 0 -1px 2px rgba(0,0,0,.65);
+        }
+
+        .screw-a {
+          top: 27%;
+        }
+
+        .screw-b {
+          bottom: 27%;
+        }
+
+        .gold-bevel {
+          width: 100%;
+          height: 100%;
+
+          padding:
+            clamp(
+              8px,
+              1.05vh,
+              18px
+            );
+
+          background:
+            linear-gradient(
+              135deg,
+              #5b3305,
+              #ffe98d 15%,
+              #7d4c09 31%,
+              #fff7bd 52%,
+              #8c5d12 72%,
+              #2d1a03
+            );
+
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.45),
+            inset 0 0 20px rgba(0,0,0,.7);
+        }
+
+        .black-mat {
+          width: 100%;
+          height: 100%;
+
+          padding:
+            clamp(
+              6px,
+              .7vh,
+              12px
+            );
+
+          background: #020202;
+
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.12),
+            inset 0 0 30px rgba(0,0,0,1);
+        }
+
+        .poster-art {
+          width: 100%;
+          height: 100%;
+          position: relative;
+          overflow: hidden;
+
+          background-size: cover;
+          background-position: center center;
+          background-repeat: no-repeat;
+
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.12),
+            inset 0 0 80px rgba(0,0,0,.78);
+
+          isolation: isolate;
+        }
+
+        .poster-art:before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+
+          background:
+            radial-gradient(
+              circle at 50% 18%,
+              rgba(255,255,255,.25),
+              transparent 27%
+            ),
+            linear-gradient(
+              90deg,
+              rgba(0,0,0,.54),
+              transparent 22%,
+              transparent 78%,
+              rgba(0,0,0,.54)
+            ),
+            linear-gradient(
+              180deg,
+              rgba(0,0,0,.08),
+              rgba(0,0,0,.03) 41%,
+              rgba(0,0,0,.94) 86%
+            );
+
+          pointer-events: none;
+        }
+
+        .poster-art:after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: 2;
+          pointer-events: none;
+
+          box-shadow:
+            inset 0 0 90px rgba(0,0,0,.84),
+            inset 0 -26vh 18vh rgba(0,0,0,.88);
+        }
+
+        .movie-grain {
+          position: absolute;
+          inset: 0;
+          z-index: 3;
+          opacity: .17;
+          mix-blend-mode: overlay;
+          pointer-events: none;
+
+          background-image:
+            radial-gradient(
+              circle at 20% 30%,
+              rgba(255,255,255,.24) 0 1px,
+              transparent 1px
+            ),
+            radial-gradient(
+              circle at 70% 60%,
+              rgba(0,0,0,.32) 0 1px,
+              transparent 1px
+            );
+
+          background-size:
+            13px 17px,
+            19px 23px;
+        }
+
+        .poster-top {
+          position: absolute;
+          top: 4.4%;
+          left: 7%;
+          right: 7%;
+          z-index: 8;
+          text-align: center;
+
+          text-shadow:
+            0 4px 18px rgba(0,0,0,1);
+        }
+
+        .top-kicker {
+          font-size:
+            clamp(
+              .66rem,
+              1.22vh,
+              1rem
+            );
+
+          line-height: 1.3;
+          font-weight: 1000;
+          letter-spacing: .18em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,.94);
+
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .top-detail {
+          max-width: 100%;
+          margin-top: .8vh;
+
+          font-size:
+            clamp(
+              .74rem,
+              1.45vh,
+              1.08rem
+            );
+
+          line-height: 1.15;
+          font-weight: 900;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,.82);
+
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .poster-bottom {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 7;
+
+          padding:
+            27vh
+            6.2%
+            2.2vh;
+
+          text-align: center;
+
+          background:
+            linear-gradient(
+              180deg,
+              transparent 0%,
+              rgba(0,0,0,.5) 20%,
+              rgba(0,0,0,.92) 48%,
+              #020202 100%
+            );
+        }
+
+        .movie-title {
+          color: #fff;
+
+          font-size:
+            clamp(
+              1.45rem,
+              var(--title-size),
+              7.8rem
+            );
+
+          line-height:
+            var(--title-line);
+
+          font-weight: 1000;
+
+          letter-spacing:
+            var(--title-spacing);
+
+          text-transform: uppercase;
+
+          text-shadow:
+            0 0 7px rgba(255,255,255,.52),
+            0 0 30px var(--accent),
+            0 8px 30px rgba(0,0,0,1);
+
+          white-space: normal;
+          overflow: visible;
+          overflow-wrap: anywhere;
+          word-break: normal;
+        }
+
+        .provider-line {
+          margin-top: 1.05vh;
+          color: var(--accent);
+
+          font-size:
+            clamp(
+              1.05rem,
+              2.45vh,
+              1.85rem
+            );
+
+          line-height: 1;
+          font-weight: 1000;
+          letter-spacing: .16em;
+          text-transform: uppercase;
+
+          text-shadow:
+            0 0 14px var(--accent),
+            0 4px 18px rgba(0,0,0,1);
+
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .detail-line {
+          max-width: 94%;
+          margin: .8vh auto 0;
+          color: rgba(255,255,255,.82);
+
+          font-size:
+            clamp(
+              .76rem,
+              1.58vh,
+              1.05rem
+            );
+
+          line-height: 1.2;
+          font-weight: 850;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+
+          text-shadow:
+            0 4px 18px rgba(0,0,0,1);
+
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .credits-block {
+          margin-top: 1.45vh;
+        }
+
+        .metadata-grid {
+          margin-top: 0;
+          display: grid;
+
+          grid-template-columns:
+            .95fr
+            1.25fr
+            .85fr;
+
+          border-top:
+            1px solid rgba(255,255,255,.18);
+
+          border-bottom:
+            1px solid rgba(255,255,255,.18);
+
+          background:
+            rgba(255,255,255,.045);
+        }
+
+        .metadata-grid > div {
+          min-width: 0;
+
+          padding:
+            .95vh
+            .76vh
+            .82vh;
+
+          border-right:
+            1px solid rgba(255,186,8,.34);
+        }
+
+        .metadata-grid > div:last-child {
+          border-right: none;
+        }
+
+        .metadata-grid span {
+          display: block;
+          margin-bottom: .42vh;
+          color: rgba(255,255,255,.52);
+
+          font-size:
+            clamp(
+              .43rem,
+              .86vh,
+              .6rem
+            );
+
+          font-weight: 950;
+          letter-spacing: .2em;
+          text-transform: uppercase;
+        }
+
+        .metadata-grid strong {
+          display: block;
+          color: rgba(255,255,255,.94);
+
+          font-size:
+            clamp(
+              .68rem,
+              1.5vh,
+              1rem
+            );
+
+          line-height: 1.12;
+          font-weight: 950;
+
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .metadata-grid .accent-text {
+          color: var(--accent);
+
+          text-shadow:
+            0 0 16px var(--accent);
+        }
+
+        .metadata-grid .star-text {
+          color: #f8d58b;
+
+          text-shadow:
+            0 0 14px rgba(255,186,8,.65);
+
+          letter-spacing: .04em;
+        }
+
+        .showtime-row {
+          margin-top: 1.25vh;
+
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          gap: 1.2vh;
+
+          color: #f8d58b;
+
+          text-shadow:
+            0 0 18px rgba(255,186,8,.7);
+        }
+
+        .showtime-row span {
+          height: 1px;
+          flex: 1;
+          max-width: 9vh;
+
+          background:
+            linear-gradient(
+              90deg,
+              transparent,
+              var(--accent),
+              transparent
+            );
+        }
+
+        .showtime-row b {
+          min-width: 0;
+          max-width: 78%;
+
+          font-size:
+            clamp(
+              .74rem,
+              1.65vh,
+              1.15rem
+            );
+
+          line-height: 1;
+          font-weight: 1000;
+          letter-spacing: .2em;
+          text-transform: uppercase;
+
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+
+        /* --------------------------------------------------
+           IDLE / LOBBY POSTER
+           -------------------------------------------------- */
+
+        .lobby-poster {
+          background-size: 100% auto;
+          background-position: center center;
+          background-repeat: no-repeat;
+          background-color: #020202;
+        }
+
+        .lobby-poster:before {
+          background:
+            linear-gradient(
+              180deg,
+              rgba(0,0,0,.64) 0%,
+              rgba(0,0,0,.10) 18%,
+              rgba(0,0,0,.04) 48%,
+              rgba(0,0,0,.18) 63%,
+              rgba(0,0,0,.93) 88%,
+              #020202 100%
+            ),
+            linear-gradient(
+              90deg,
+              rgba(0,0,0,.42),
+              transparent 20%,
+              transparent 80%,
+              rgba(0,0,0,.42)
+            );
+        }
+
+        .lobby-poster:after {
+          box-shadow:
+            inset 0 0 90px rgba(0,0,0,.55);
+        }
+
+        .lobby-top {
+          position: absolute;
+          z-index: 10;
+
+          top: 4.2%;
+          left: 6%;
+          right: 6%;
+
+          text-align: center;
+
+          text-shadow:
+            0 3px 14px rgba(0,0,0,1),
+            0 0 24px rgba(0,0,0,.8);
+        }
+
+        .lobby-date {
+          color: rgba(255,255,255,.88);
+
+          font-size:
+            clamp(
+              .72rem,
+              1.35vh,
+              1.05rem
+            );
+
+          line-height: 1;
+          font-weight: 900;
+          letter-spacing: .16em;
+          text-transform: uppercase;
+        }
+
+        .lobby-time {
+          margin-top: .8vh;
+          color: #fff;
+
+          font-size:
+            clamp(
+              2rem,
+              5.2vh,
+              4.4rem
+            );
+
+          line-height: .9;
+          font-weight: 1000;
+          letter-spacing: -.055em;
+        }
+
+        .lobby-bottom {
+          position: absolute;
+          z-index: 10;
+
+          left: 0;
+          right: 0;
+          bottom: 0;
+
+          padding:
+            17vh
+            6.2%
+            2.4vh;
+
+          text-align: center;
+
+          background:
+            linear-gradient(
+              180deg,
+              transparent,
+              rgba(0,0,0,.55) 33%,
+              rgba(0,0,0,.94) 65%,
+              #020202
+            );
+        }
+
+        .lobby-weather {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .lobby-weather-icon {
+          font-size:
+            clamp(
+              1.4rem,
+              3vh,
+              2.5rem
+            );
+
+          line-height: 1;
+
+          filter:
+            drop-shadow(
+              0 0 12px
+              rgba(255,255,255,.25)
+            );
+        }
+
+        .lobby-temp {
+          margin-top: .45vh;
+          color: #fff;
+
+          font-size:
+            clamp(
+              2.2rem,
+              5vh,
+              4rem
+            );
+
+          line-height: .9;
+          font-weight: 1000;
+          letter-spacing: -.06em;
+
+          text-shadow:
+            0 0 22px rgba(255,186,8,.22),
+            0 5px 20px #000;
+        }
+
+        .lobby-condition {
+          margin-top: .75vh;
+
+          color: #f8d58b;
+
+          font-size:
+            clamp(
+              .8rem,
+              1.55vh,
+              1.12rem
+            );
+
+          line-height: 1;
+          font-weight: 1000;
+          letter-spacing: .15em;
+          text-transform: uppercase;
+
+          text-shadow:
+            0 0 16px rgba(255,186,8,.55);
+        }
+
+        .lobby-forecast {
+          margin-top: .75vh;
+          color: rgba(255,255,255,.72);
+
+          font-size:
+            clamp(
+              .68rem,
+              1.15vh,
+              .9rem
+            );
+
+          line-height: 1;
+          font-weight: 850;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+        }
+
+        .lobby-divider {
+          width: 72%;
+          height: 1px;
+
+          margin:
+            1.55vh
+            auto
+            1.35vh;
+
+          background:
+            linear-gradient(
+              90deg,
+              transparent,
+              rgba(255,186,8,.75),
+              transparent
+            );
+        }
+
+        .lobby-ready {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 1.2vh;
+
+          color: #f8d58b;
+
+          text-shadow:
+            0 0 18px rgba(255,186,8,.7);
+        }
+
+        .lobby-ready span {
+          height: 1px;
+          flex: 1;
+          max-width: 8vh;
+
+          background:
+            linear-gradient(
+              90deg,
+              transparent,
+              #ffba08,
+              transparent
+            );
+        }
+
+        .lobby-ready b {
+          font-size:
+            clamp(
+              .7rem,
+              1.4vh,
+              1rem
+            );
+
+          line-height: 1;
+          font-weight: 1000;
+          letter-spacing: .19em;
+          white-space: nowrap;
+        }
+
+

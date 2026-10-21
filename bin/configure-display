@@ -1,0 +1,17 @@
+#!/bin/bash
+set -Eeuo pipefail
+source "$(dirname "$(readlink -f "$0")")/settings"
+load_settings
+output=$DISPLAY_OUTPUT
+for ((attempt=0; attempt<30; attempt++)); do
+    connected=$(xrandr --query | awk '$2 == "connected" {print $1}')
+    if [[ $output == auto ]]; then output=$(head -n 1 <<<"$connected"); fi
+    if [[ -n $output ]] && grep -Fxq -- "$output" <<<"$connected"; then break; fi
+    output=$DISPLAY_OUTPUT
+    sleep 1
+done
+[[ -n $output && $output != auto ]] && grep -Fxq -- "$output" <<<"$connected" || { echo "Display not connected: $DISPLAY_OUTPUT" >&2; exit 1; }
+args=(--output "$output" --primary --rotate "$DISPLAY_ROTATION" --reflect "$DISPLAY_REFLECTION")
+if [[ -n $DISPLAY_MODE ]]; then args+=(--mode "$DISPLAY_MODE"); else args+=(--auto); fi
+[[ -z $DISPLAY_RATE ]] || args+=(--rate "$DISPLAY_RATE")
+xrandr "${args[@]}"

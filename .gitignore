@@ -1,0 +1,16 @@
+# Recovered server files and chat history may contain private information.
+reference/
+server-backup/
+local/
+Commands.txt
+ama
+*.log
+*.env
+kiosk.conf
+.DS_Store
+Thumbs.db
+movie-posters/
+chromium-portrait.sh
+project-context.json
+*.bundle
+__pycache__/

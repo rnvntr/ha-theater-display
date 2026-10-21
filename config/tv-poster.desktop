@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Theater Poster TV
+Comment=Home Assistant portrait kiosk
+Exec=/opt/tv-poster-system/bin/kiosk-session
+Type=Application
