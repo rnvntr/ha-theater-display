@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30
+
+- Document the verified DietPi mode-11 console deployment separately from LightDM.
+- Add an opt-in 00:05 systemd kiosk-session restart installer.
+- Preserve the live installation details in the private repository only.
+
 ## Unreleased
 
 - Reconciled running-server display and browser settings with a Pi 3 portrait preset.

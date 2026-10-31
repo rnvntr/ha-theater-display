@@ -1,0 +1,8 @@
+#!/bin/sh
+# Dedicated DietPi console kiosk only; does not target SSH sessions.
+set -eu
+for sid in $(loginctl list-sessions --no-legend | awk '{print $1}'); do
+    tty=$(loginctl show-session "$sid" -p TTY --value)
+    if [ "$tty" = tty1 ]; then loginctl terminate-session "$sid"; fi
+done
+systemctl restart getty@tty1.service

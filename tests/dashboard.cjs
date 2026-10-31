@@ -23,3 +23,5 @@ assert.doesNotMatch(html, /Paused title|Other room/);
 assert.match(render({}, {...variables, poster_files: ['example poster.jpg']}), /example%20poster.jpg/);
 assert.doesNotMatch(render({'media_player.first': player('unavailable', 'Offline title')}, variables), /Offline title/);
 console.log('Dashboard rendering checks passed');
+
+assert.match(yaml, /views:\r?\n  - title:/, 'views must be a list, not a mapping');

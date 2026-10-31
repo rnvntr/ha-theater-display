@@ -7,8 +7,9 @@ A lightweight portrait kiosk for a Raspberry Pi 3 B running DietPi. It opens a
 dashboard on your existing Home Assistant server. One deployment script installs
 the display software, configures automatic startup and reboots the Pi.
 
-**Status:** scripts tested with simulated displays and configuration fixtures.
-Real hardware acceptance is pending. A configurable HA poster dashboard is included. Follow [Home Assistant setup](docs/home-assistant.md) to install the card, configure your players and upload idle posters before deploying the Pi.
+**Status:** the existing DietPi console kiosk and nightly session restart were inspected and tested on a real Pi on 2026-10-30. The separate LightDM installer remains fixture-tested, not hardware-validated. See [the verified deployment](docs/verified-console-kiosk.md) before updating a working display.
+
+The configurable HA dashboard is included. See [Home Assistant setup](docs/home-assistant.md) for players, weather, card dependencies and poster assets.
 
 ## First deployment
 

@@ -66,3 +66,6 @@ DISPLAY_MODE=''
 build_browser_args
 if printf '%s\n' "${args[@]}" | grep -q -- '--window-size='; then echo 'FAIL: automatic mode has fixed browser size'; exit 1; fi
 echo 'PASS: portrait browser dimensions, scale, rendering and opt-in compatibility flags'
+
+bash "$root/tests/console-refresh.sh"
+bash -n "$root/scripts/install-console-refresh.sh"
